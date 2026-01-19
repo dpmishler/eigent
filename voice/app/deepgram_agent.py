@@ -242,6 +242,42 @@ class VoiceAgent:
         if self.connection:
             await self.connection.send_media(audio_bytes)
 
+    async def inject_message(self, message: str) -> bool:
+        """Inject a message for the agent to speak.
+
+        This uses the Deepgram agent's inject capability to have the agent
+        speak a message to the user.
+
+        Args:
+            message: The message text for the agent to speak.
+
+        Returns:
+            True if the message was successfully injected, False otherwise.
+        """
+        if not self.connection:
+            logger.warning("Cannot inject message: connection not available")
+            return False
+
+        try:
+            # Try to use the agent's inject capability if available
+            if hasattr(self.connection, 'send_inject'):
+                await self.connection.send_inject({"text": message})
+                return True
+            elif hasattr(self.connection, 'inject'):
+                await self.connection.inject(message)
+                return True
+            else:
+                # TODO: Deepgram SDK may not expose message injection yet.
+                # This is a placeholder for when the API becomes available.
+                logger.warning(
+                    "inject_message: Deepgram connection does not support message injection. "
+                    "Message not sent: %s", message[:100] if len(message) > 100 else message
+                )
+                return False
+        except Exception as e:
+            logger.error("Failed to inject message: %s", e, exc_info=True)
+            return False
+
     async def disconnect(self):
         """Close the Deepgram connection."""
         logger.info("Disconnecting from Deepgram Voice Agent")

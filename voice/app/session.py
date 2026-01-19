@@ -104,27 +104,43 @@ class VoiceSession:
         logger.info("Voice session stopped for project %s", self.project_id)
 
     async def _cleanup(self):
-        """Clean up all resources."""
+        """Clean up all resources with timeout protection."""
+        cleanup_timeout = 5.0  # seconds
+
         if self._sse_task:
             self._sse_task.cancel()
             try:
-                await self._sse_task
+                await asyncio.wait_for(self._sse_task, timeout=cleanup_timeout)
             except asyncio.CancelledError:
                 logger.debug("SSE task cancelled")
+            except asyncio.TimeoutError:
+                logger.warning("SSE task cancellation timed out after %.1fs", cleanup_timeout)
             except Exception as e:
                 logger.warning("Error while cancelling SSE task: %s", e)
             self._sse_task = None
 
         if self._agent:
             try:
-                await self._agent.disconnect()
+                await asyncio.wait_for(
+                    self._agent.disconnect(), timeout=cleanup_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Voice agent disconnect timed out after %.1fs", cleanup_timeout
+                )
             except Exception as e:
                 logger.warning("Error while disconnecting voice agent: %s", e)
             self._agent = None
 
         if self._eigent:
             try:
-                await self._eigent.__aexit__(None, None, None)
+                await asyncio.wait_for(
+                    self._eigent.__aexit__(None, None, None), timeout=cleanup_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Eigent client close timed out after %.1fs", cleanup_timeout
+                )
             except Exception as e:
                 logger.warning("Error while closing Eigent client: %s", e)
             self._eigent = None
@@ -174,30 +190,50 @@ class VoiceSession:
                 logger.error("Error in on_audio_out callback: %s", e, exc_info=True)
 
     async def _subscribe_events(self):
-        """Subscribe to Eigent SSE events and trigger voice notifications."""
+        """Subscribe to Eigent SSE events and trigger voice notifications.
+
+        Implements reconnection with exponential backoff on failure.
+        """
         logger.info("Starting SSE event subscription for project %s", self.project_id)
 
-        try:
-            async for event in self._eigent.subscribe_events(self.project_id):
+        backoff = 1.0  # Initial backoff in seconds
+        max_backoff = 30.0  # Maximum backoff
+
+        while self._active:
+            # Store local reference to avoid race condition if _cleanup() runs concurrently
+            eigent = self._eigent
+            if eigent is None:
+                logger.warning("SSE subscription stopped: Eigent client is None")
+                break
+
+            try:
+                async for event in eigent.subscribe_events(self.project_id):
+                    if not self._active:
+                        logger.debug("SSE subscription stopped: session no longer active")
+                        return
+                    try:
+                        await self._handle_sse_event(event)
+                    except Exception as e:
+                        logger.error(
+                            "Error handling SSE event %s: %s", event.event, e, exc_info=True
+                        )
+                # If we exit the loop normally (stream ended), reset backoff and reconnect
+                backoff = 1.0
+                logger.info("SSE stream ended, reconnecting...")
+            except asyncio.CancelledError:
+                logger.debug("SSE subscription cancelled")
+                raise
+            except Exception as e:
                 if not self._active:
-                    logger.debug("SSE subscription stopped: session no longer active")
                     break
-                try:
-                    await self._handle_sse_event(event)
-                except Exception as e:
-                    logger.error(
-                        "Error handling SSE event %s: %s", event.event, e, exc_info=True
-                    )
-        except asyncio.CancelledError:
-            logger.debug("SSE subscription cancelled")
-            raise
-        except Exception as e:
-            logger.error(
-                "SSE subscription error for project %s: %s",
-                self.project_id,
-                e,
-                exc_info=True,
-            )
+                logger.error(
+                    "SSE subscription error for project %s: %s (retrying in %.1fs)",
+                    self.project_id,
+                    e,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)  # Exponential backoff with cap
 
     async def _handle_sse_event(self, event: SSEEvent):
         """Handle SSE event and decide whether to notify user.
@@ -249,15 +285,10 @@ class VoiceSession:
             logger.warning("Cannot notify user: voice agent not initialized")
             return
 
-        if not self._agent.connection:
-            logger.warning("Cannot notify user: voice agent not connected")
-            return
-
-        try:
-            # Inject message for agent to speak
-            await self._agent.connection.send_text(message)
-        except Exception as e:
-            logger.error("Failed to send notification to user: %s", e, exc_info=True)
+        # Use the agent's inject_message method for proper message injection
+        success = await self._agent.inject_message(message)
+        if not success:
+            logger.warning("Failed to inject notification message to user")
 
     # Function handlers for Deepgram agent
     async def _fn_submit_task(self, prompt: str) -> dict:
