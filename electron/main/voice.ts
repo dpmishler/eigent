@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, globalShortcut } from 'electron';
 
 let voiceServicePort = 5002;
 let activeVoiceWindow: BrowserWindow | null = null;
@@ -84,6 +84,16 @@ export function setupVoiceHandlers(mainWindow: BrowserWindow) {
       activeVoiceWindow.setSize(320, 200);
       activeVoiceWindow.setAlwaysOnTop(true);
       activeVoiceWindow.setPosition(width - 340, height - 220);
+    }
+  });
+
+  // Register global shortcut for voice toggle
+  globalShortcut.register('CommandOrControl+Shift+V', () => {
+    if (activeVoiceWindow) {
+      activeVoiceWindow.close();
+    } else {
+      // Trigger voice-open-panel
+      mainWindow.webContents.send('voice-toggle');
     }
   });
 }

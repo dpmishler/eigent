@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Paperclip, ArrowRight, X, Image, FileText, UploadCloud, Plus } from "lucide-react";
+import { Paperclip, ArrowRight, X, Image, FileText, UploadCloud, Plus, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -166,6 +166,10 @@ export const Inputbox = ({
 	const handleRemoveFile = (filePath: string) => {
 		const newFiles = files.filter((f) => f.filePath !== filePath);
 		onFilesChange?.(newFiles);
+	};
+
+	const handleVoiceClick = async () => {
+		await window.ipcRenderer.invoke('voice-open-panel');
 	};
 
 	const getFileIcon = (fileName: string) => {
@@ -421,24 +425,36 @@ export const Inputbox = ({
 					</Button>
 				</div>
 
-				{/* Right: Send Button */}
-			<Button
-				size="icon"
-				variant={value.trim().length > 0 ? "success" : "secondary"}
-				className="rounded-full"
-				onClick={handleSend}
-				disabled={disabled || value.trim().length === 0}
-			>
-				<ArrowRight
-					size={16}
-					className={cn(
-						"text-button-primary-icon-default transition-transform duration-200",
-						value.trim().length > 0 && "rotate-[-90deg]"
-					)}
-				/>
-				{/* Inner shadow highlight (from Figma design) */}
-				<div className="absolute inset-0 pointer-events-none shadow-[0px_1px_0px_0px_inset_rgba(255,255,255,0.33)]" />
-			</Button>
+				{/* Right: Voice and Send Buttons */}
+				<div className="flex items-center gap-1">
+					<Button
+						variant="ghost"
+						size="icon"
+						className="rounded-full"
+						onClick={handleVoiceClick}
+						disabled={disabled}
+						title="Voice mode (Cmd+Shift+V)"
+					>
+						<Mic size={16} className="text-icon-primary" />
+					</Button>
+					<Button
+						size="icon"
+						variant={value.trim().length > 0 ? "success" : "secondary"}
+						className="rounded-full"
+						onClick={handleSend}
+						disabled={disabled || value.trim().length === 0}
+					>
+						<ArrowRight
+							size={16}
+							className={cn(
+								"text-button-primary-icon-default transition-transform duration-200",
+								value.trim().length > 0 && "rotate-[-90deg]"
+							)}
+						/>
+						{/* Inner shadow highlight (from Figma design) */}
+						<div className="absolute inset-0 pointer-events-none shadow-[0px_1px_0px_0px_inset_rgba(255,255,255,0.33)]" />
+					</Button>
+				</div>
 			</div>
 		</div>
 	);
