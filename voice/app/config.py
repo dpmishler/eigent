@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -11,6 +12,16 @@ class Settings(BaseSettings):
     tts_model: str = "aura-asteria-en"
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
+
+    @field_validator("deepgram_api_key")
+    @classmethod
+    def validate_api_key(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError(
+                "DEEPGRAM_API_KEY is required. "
+                "Please set it in your environment or .env file."
+            )
+        return v.strip()
 
     class Config:
         env_file = ".env"

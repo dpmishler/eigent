@@ -2,6 +2,7 @@
 
 import json
 import asyncio
+import logging
 from typing import Callable, Optional, Any, Dict
 
 from deepgram import AsyncDeepgramClient
@@ -22,7 +23,8 @@ from deepgram.agent.v1 import (
     AgentV1SettingsAgentThinkProvider_OpenAi,
     AgentV1SettingsAgentSpeakEndpointProvider_Deepgram,
 )
-from deepgram.core.events import EventType
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.prompts import VOICE_AGENT_SYSTEM_PROMPT, VOICE_AGENT_GREETING
@@ -53,6 +55,7 @@ class VoiceAgent:
 
     async def connect(self):
         """Establish connection to Deepgram Voice Agent."""
+        logger.info("Connecting to Deepgram Voice Agent")
         self.client = AsyncDeepgramClient(api_key=settings.deepgram_api_key)
 
         # Build settings using the SDK's typed models
@@ -95,6 +98,7 @@ class VoiceAgent:
 
         # Start listening for messages in the background
         self._listen_task = asyncio.create_task(self._message_loop())
+        logger.info("Connected to Deepgram Voice Agent successfully")
 
     def _get_function_definitions(self) -> list:
         """Return function definitions for Deepgram agent."""
@@ -152,9 +156,11 @@ class VoiceAgent:
         try:
             async for message in self.connection:
                 await self._handle_message(message)
+        except asyncio.CancelledError:
+            logger.debug("Message loop cancelled")
+            raise
         except Exception as e:
-            # Connection closed or error occurred
-            pass
+            logger.error("Error in message loop: %s", e, exc_info=True)
 
     async def _handle_message(self, message: Any):
         """Handle incoming message from Deepgram."""
@@ -180,18 +186,35 @@ class VoiceAgent:
                 continue
 
             func_name = func.name
-            func_args = json.loads(func.arguments) if func.arguments else {}
             call_id = func.id
+
+            # Parse function arguments with error handling
+            try:
+                func_args = json.loads(func.arguments) if func.arguments else {}
+            except json.JSONDecodeError as e:
+                logger.error(
+                    "Failed to parse arguments for function %s: %s",
+                    func_name, e
+                )
+                await self._send_function_response(
+                    call_id, func_name, {"error": "Invalid function arguments"}
+                )
+                continue
 
             if func_name in self.functions:
                 try:
+                    logger.debug("Calling function %s with args: %s", func_name, func_args)
                     result = await self.functions[func_name](**func_args)
                     await self._send_function_response(call_id, func_name, result)
                 except Exception as e:
+                    logger.error(
+                        "Error executing function %s: %s", func_name, e, exc_info=True
+                    )
                     await self._send_function_response(
-                        call_id, func_name, {"error": str(e)}
+                        call_id, func_name, {"error": "Function execution failed"}
                     )
             else:
+                logger.warning("Unknown function called: %s", func_name)
                 await self._send_function_response(
                     call_id, func_name, {"error": f"Unknown function: {func_name}"}
                 )
@@ -200,12 +223,19 @@ class VoiceAgent:
         self, call_id: str, name: str, result: dict
     ):
         """Send function call result back to agent."""
+        if not self.connection:
+            logger.warning(
+                "Cannot send function response for %s: connection not available", name
+            )
+            return
+
         response = AgentV1SendFunctionCallResponse(
             id=call_id,
             name=name,
             content=json.dumps(result),
         )
         await self.connection.send_function_call_response(response)
+        logger.debug("Sent function response for %s", name)
 
     async def send_audio(self, audio_bytes: bytes):
         """Send audio data to Deepgram for processing."""
@@ -214,15 +244,23 @@ class VoiceAgent:
 
     async def disconnect(self):
         """Close the Deepgram connection."""
-        if self._listen_task:
-            self._listen_task.cancel()
-            try:
-                await self._listen_task
-            except asyncio.CancelledError:
-                pass
-            self._listen_task = None
+        logger.info("Disconnecting from Deepgram Voice Agent")
+        try:
+            if self._listen_task:
+                self._listen_task.cancel()
+                try:
+                    await self._listen_task
+                except asyncio.CancelledError:
+                    pass
 
-        if self._connection_context:
-            await self._connection_context.__aexit__(None, None, None)
+            if self._connection_context:
+                await self._connection_context.__aexit__(None, None, None)
+        except Exception as e:
+            logger.error("Error during disconnect: %s", e, exc_info=True)
+        finally:
+            # Always reset all connection state
+            self._listen_task = None
             self._connection_context = None
             self.connection = None
+            self.client = None
+            logger.debug("Disconnect cleanup complete")
