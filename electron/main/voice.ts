@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow, globalShortcut, screen } from 'electron';
+import { getVoicePort } from './voiceService';
 
-let voiceServicePort = 5002;
 let activeVoiceWindow: BrowserWindow | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -55,15 +55,18 @@ export function setupVoiceHandlers(mainWindow: BrowserWindow) {
   // Store reference to main window for use in helper function
   mainWindowRef = mainWindow;
 
-  // Set voice service port
-  ipcMain.handle('voice-set-port', (_, port: number) => {
-    voiceServicePort = port;
-    return true;
+  // Get voice service port (now dynamically retrieved from voiceService)
+  ipcMain.handle('voice-get-port', () => {
+    return getVoicePort();
   });
 
   // Get voice service URL
   ipcMain.handle('voice-get-url', () => {
-    return `ws://localhost:${voiceServicePort}/voice/stream`;
+    const port = getVoicePort();
+    if (!port) {
+      return null;
+    }
+    return `ws://localhost:${port}/voice/stream`;
   });
 
   // Create floating voice panel window

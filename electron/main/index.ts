@@ -41,6 +41,7 @@ import {
 } from './install-deps';
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process';
 import { setupVoiceHandlers, cleanupVoiceHandlers } from './voice';
+import { startVoiceService, stopVoiceService, getVoicePort } from './voiceService';
 
 const userData = app.getPath('userData');
 
@@ -1692,6 +1693,23 @@ const checkAndStartBackend = async () => {
       python_process?.on('exit', (code, signal) => {
         log.info('Python process exited', { code, signal });
       });
+
+      // Start voice service after backend is ready
+      try {
+        const voicePort = await startVoiceService();
+        log.info(`Voice service started on port ${voicePort}`);
+
+        // Notify frontend of voice service port
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('voice-service-ready', {
+            success: true,
+            port: voicePort,
+          });
+        }
+      } catch (voiceError) {
+        log.warn('Failed to start voice service:', voiceError);
+        // Voice service is optional, don't fail the entire startup
+      }
     } else {
       log.warn('Tool not installed, cannot start backend service');
       // Notify frontend that backend cannot start
@@ -1969,6 +1987,9 @@ app.on('before-quit', async (event) => {
 
     // Clean up voice handlers (unregister global shortcut)
     cleanupVoiceHandlers();
+
+    // Stop voice service
+    stopVoiceService();
 
     // Clean up resources
     if (webViewManager) {
