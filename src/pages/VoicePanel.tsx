@@ -30,7 +30,7 @@ export default function VoicePanel() {
       connect().then(() => startMicrophone());
     }
     return () => disconnect();
-  }, [activeProjectId]);
+  }, [activeProjectId, connect, disconnect, startMicrophone]);
 
   const handleClose = () => {
     disconnect();

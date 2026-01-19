@@ -31,6 +31,7 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
     const source = audioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
+    source.onended = () => audioContext.close();  // Add cleanup
     source.start();
   };
 
@@ -50,24 +51,28 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
 
       ws.onmessage = (event) => {
         if (typeof event.data === 'string') {
-          const msg = JSON.parse(event.data);
+          try {
+            const msg = JSON.parse(event.data);
 
-          if (msg.type === 'user_transcript') {
-            setMessages(prev => [...prev, {
-              id: crypto.randomUUID(),
-              type: 'user',
-              text: msg.text,
-              timestamp: new Date(),
-            }]);
-          } else if (msg.type === 'agent_transcript') {
-            setMessages(prev => [...prev, {
-              id: crypto.randomUUID(),
-              type: 'agent',
-              text: msg.text,
-              timestamp: new Date(),
-            }]);
-          } else if (msg.type === 'task_submitted') {
-            onTaskSubmitted?.(msg.prompt);
+            if (msg.type === 'user_transcript') {
+              setMessages(prev => [...prev, {
+                id: crypto.randomUUID(),
+                type: 'user',
+                text: msg.text,
+                timestamp: new Date(),
+              }]);
+            } else if (msg.type === 'agent_transcript') {
+              setMessages(prev => [...prev, {
+                id: crypto.randomUUID(),
+                type: 'agent',
+                text: msg.text,
+                timestamp: new Date(),
+              }]);
+            } else if (msg.type === 'task_submitted') {
+              onTaskSubmitted?.(msg.prompt);
+            }
+          } catch (e) {
+            console.error('Failed to parse WebSocket message:', e);
           }
         } else if (event.data instanceof Blob) {
           // Audio data - play it
@@ -107,7 +112,9 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'stop' }));
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'stop' }));
+      }
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -131,6 +138,8 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
       audioContextRef.current = new AudioContext({ sampleRate: 16000 });
 
       const source = audioContextRef.current.createMediaStreamSource(stream);
+      // TODO: Migrate to AudioWorkletNode - ScriptProcessorNode is deprecated
+      // See: https://developer.mozilla.org/en-US/docs/Web/API/ScriptProcessorNode
       const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
