@@ -40,7 +40,7 @@ import {
   getInstallationStatus,
 } from './install-deps';
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process';
-import { setupVoiceHandlers } from './voice';
+import { setupVoiceHandlers, cleanupVoiceHandlers } from './voice';
 
 const userData = app.getPath('userData');
 
@@ -1966,6 +1966,9 @@ app.on('before-quit', async (event) => {
   try {
     // NOTE: Profile sync removed - we now use app userData directly for all partitions
     // No need to sync between different profile directories
+
+    // Clean up voice handlers (unregister global shortcut)
+    cleanupVoiceHandlers();
 
     // Clean up resources
     if (webViewManager) {
