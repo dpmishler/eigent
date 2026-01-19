@@ -9,6 +9,7 @@ const Signup = lazy(() => import("@/pages/SignUp"));
 const Home = lazy(() => import("@/pages/Home"));
 const History = lazy(() => import("@/pages/History"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const VoicePanel = lazy(() => import("@/pages/VoicePanel"));
 
 // Route guard: Check if user is logged in
 const ProtectedRoute = () => {
@@ -54,6 +55,7 @@ const AppRoutes = () => (
 	<Routes>
 		<Route path="/login" element={<Login />} />
 		<Route path="/signup" element={<Signup />} />
+		<Route path="/voice-panel" element={<VoicePanel />} />
 		<Route element={<ProtectedRoute />}>
 			<Route element={<Layout />}>
 				<Route path="/" element={<Home />} />
