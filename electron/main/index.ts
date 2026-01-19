@@ -40,6 +40,7 @@ import {
   getInstallationStatus,
 } from './install-deps';
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process';
+import { setupVoiceHandlers } from './voice';
 
 const userData = app.getPath('userData');
 
@@ -1337,6 +1338,9 @@ async function createWindow() {
   // ==================== initialize manager ====================
   fileReader = new FileReader(win);
   webViewManager = new WebViewManager(win);
+
+  // ==================== setup voice handlers ====================
+  setupVoiceHandlers(win);
 
   // create multiple webviews
   log.info(
