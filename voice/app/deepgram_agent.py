@@ -71,7 +71,7 @@ class VoiceAgent:
                 listen=None,  # Use defaults
                 think=AgentV1SettingsAgentThink(
                     provider={
-                        "type": "open_ai",
+                        "type": settings.llm_provider,
                         "model": settings.llm_model,
                     },
                     prompt=VOICE_AGENT_SYSTEM_PROMPT,

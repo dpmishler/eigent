@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     # Deepgram Voice Agent settings
     deepgram_model: str = "nova-2"
     tts_model: str = "aura-asteria-en"
-    llm_provider: str = "openai"
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: str = "anthropic"
+    llm_model: str = "claude-3-5-haiku-latest"
 
     @field_validator("deepgram_api_key")
     @classmethod
