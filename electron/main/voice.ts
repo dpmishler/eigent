@@ -1,6 +1,9 @@
 import { ipcMain, BrowserWindow, globalShortcut, screen } from 'electron';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import { getVoicePort } from './voiceService';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let activeVoiceWindow: BrowserWindow | null = null;
 let preloadPath: string | null = null;
