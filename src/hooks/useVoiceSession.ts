@@ -24,16 +24,89 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
-  const playAudio = async (blob: Blob) => {
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioContext = new AudioContext();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.onended = () => audioContext.close();  // Add cleanup
-    source.start();
-  };
+  // Audio playback context (separate from mic capture context)
+  const playbackContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<AudioBufferSourceNode[]>([]);
+  const nextPlayTimeRef = useRef<number>(0);
+
+  // Barge-in state: when true, ignore incoming audio (user interrupted agent)
+  const bargedInRef = useRef<boolean>(false);
+
+  // Store callbacks in refs to avoid recreating connect when they change
+  const onTaskSubmittedRef = useRef(onTaskSubmitted);
+  onTaskSubmittedRef.current = onTaskSubmitted;
+
+  // Get or create playback audio context
+  const getPlaybackContext = useCallback(() => {
+    if (!playbackContextRef.current || playbackContextRef.current.state === 'closed') {
+      // Deepgram TTS output is 24kHz
+      playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
+    }
+    return playbackContextRef.current;
+  }, []);
+
+  // Stop all playing audio and clear queue (used for barge-in)
+  const stopAllAudio = useCallback(() => {
+    audioQueueRef.current.forEach(source => {
+      try { source.stop(); } catch { /* ignore */ }
+    });
+    audioQueueRef.current = [];
+    nextPlayTimeRef.current = 0;
+  }, []);
+
+  // Play raw PCM audio (linear16 @ 24kHz from Deepgram)
+  const playAudio = useCallback(async (blob: Blob) => {
+    // Skip audio if user has barged in (interrupted agent)
+    if (bargedInRef.current) {
+      return;
+    }
+
+    try {
+      const audioContext = getPlaybackContext();
+
+      // Resume context if suspended (browsers require user interaction)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      const arrayBuffer = await blob.arrayBuffer();
+
+      // Convert raw PCM (Int16) to Float32 for Web Audio API
+      const int16Data = new Int16Array(arrayBuffer);
+      const float32Data = new Float32Array(int16Data.length);
+
+      for (let i = 0; i < int16Data.length; i++) {
+        // Convert Int16 (-32768 to 32767) to Float32 (-1.0 to 1.0)
+        float32Data[i] = int16Data[i] / 32768;
+      }
+
+      // Create audio buffer from raw PCM data
+      const audioBuffer = audioContext.createBuffer(1, float32Data.length, 24000);
+      audioBuffer.copyToChannel(float32Data, 0);
+
+      // Create source node and schedule playback
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+
+      // Schedule audio to play in sequence (avoid overlapping)
+      const currentTime = audioContext.currentTime;
+      const startTime = Math.max(currentTime, nextPlayTimeRef.current);
+      source.start(startTime);
+
+      // Update next play time
+      nextPlayTimeRef.current = startTime + audioBuffer.duration;
+
+      // Track for cleanup
+      audioQueueRef.current.push(source);
+      source.onended = () => {
+        const idx = audioQueueRef.current.indexOf(source);
+        if (idx > -1) audioQueueRef.current.splice(idx, 1);
+      };
+    } catch (e) {
+      console.error('Error playing audio:', e);
+    }
+  }, [getPlaybackContext]);
 
   const connect = useCallback(async () => {
     try {
@@ -69,7 +142,14 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
                 timestamp: new Date(),
               }]);
             } else if (msg.type === 'task_submitted') {
-              onTaskSubmitted?.(msg.prompt);
+              onTaskSubmittedRef.current?.(msg.prompt);
+            } else if (msg.type === 'user_started_speaking') {
+              // Barge-in: user interrupted agent, stop all audio immediately
+              bargedInRef.current = true;
+              stopAllAudio();
+            } else if (msg.type === 'agent_started_speaking') {
+              // Agent starting new response, allow audio playback again
+              bargedInRef.current = false;
             }
           } catch (e) {
             console.error('Failed to parse WebSocket message:', e);
@@ -92,7 +172,7 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect');
     }
-  }, [projectId, authToken, onTaskSubmitted]);
+  }, [projectId, authToken]);
 
   const stopMicrophone = useCallback(() => {
     if (processorRef.current) {
@@ -119,6 +199,18 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
       wsRef.current = null;
     }
     stopMicrophone();
+
+    // Stop any playing audio and close playback context
+    audioQueueRef.current.forEach(source => {
+      try { source.stop(); } catch { /* ignore */ }
+    });
+    audioQueueRef.current = [];
+    nextPlayTimeRef.current = 0;
+    if (playbackContextRef.current && playbackContextRef.current.state !== 'closed') {
+      playbackContextRef.current.close();
+      playbackContextRef.current = null;
+    }
+
     setIsConnected(false);
     setIsListening(false);
   }, [stopMicrophone]);

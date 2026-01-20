@@ -32,6 +32,9 @@ class VoiceSession:
     on_audio_out: Optional[Callable[[bytes], None]] = None
     on_task_submitted: Optional[Callable[[str], None]] = None
     on_status_update: Optional[Callable[[TaskStatus], None]] = None
+    # Barge-in callbacks
+    on_user_started_speaking: Optional[Callable[[], None]] = None
+    on_agent_started_speaking: Optional[Callable[[], None]] = None
 
     # Internal state
     _agent: Optional[VoiceAgent] = field(default=None, init=False)
@@ -61,6 +64,8 @@ class VoiceSession:
                 on_transcript=self._handle_transcript,
                 on_agent_response=self._handle_agent_response,
                 on_audio=self._handle_audio,
+                on_user_started_speaking=self._handle_user_started_speaking,
+                on_agent_started_speaking=self._handle_agent_started_speaking,
             )
 
             # Register function handlers
@@ -188,6 +193,24 @@ class VoiceSession:
                 self.on_audio_out(audio_bytes)
             except Exception as e:
                 logger.error("Error in on_audio_out callback: %s", e, exc_info=True)
+
+    def _handle_user_started_speaking(self):
+        """Handle user barge-in (started speaking while agent was talking)."""
+        logger.debug("User started speaking (barge-in)")
+        if self.on_user_started_speaking:
+            try:
+                self.on_user_started_speaking()
+            except Exception as e:
+                logger.error("Error in on_user_started_speaking callback: %s", e, exc_info=True)
+
+    def _handle_agent_started_speaking(self):
+        """Handle agent starting to speak (new response)."""
+        logger.debug("Agent started speaking")
+        if self.on_agent_started_speaking:
+            try:
+                self.on_agent_started_speaking()
+            except Exception as e:
+                logger.error("Error in on_agent_started_speaking callback: %s", e, exc_info=True)
 
     async def _subscribe_events(self):
         """Subscribe to Eigent SSE events and trigger voice notifications.

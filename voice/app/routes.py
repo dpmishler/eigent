@@ -104,6 +104,22 @@ async def voice_stream(
         pending_tasks.append(task)
         task.add_done_callback(lambda t: pending_tasks.remove(t) if t in pending_tasks else None)
 
+    def on_user_started_speaking():
+        """User started speaking - signal barge-in to stop agent audio."""
+        task = asyncio.create_task(
+            send_json({"type": "user_started_speaking"})
+        )
+        pending_tasks.append(task)
+        task.add_done_callback(lambda t: pending_tasks.remove(t) if t in pending_tasks else None)
+
+    def on_agent_started_speaking():
+        """Agent started speaking - signal to resume accepting audio."""
+        task = asyncio.create_task(
+            send_json({"type": "agent_started_speaking"})
+        )
+        pending_tasks.append(task)
+        task.add_done_callback(lambda t: pending_tasks.remove(t) if t in pending_tasks else None)
+
     # Create and start session
     session = VoiceSession(
         project_id=project_id,
@@ -112,6 +128,8 @@ async def voice_stream(
         on_agent_speech=on_agent_speech,
         on_audio_out=on_audio_out,
         on_task_submitted=on_task_submitted,
+        on_user_started_speaking=on_user_started_speaking,
+        on_agent_started_speaking=on_agent_started_speaking,
     )
 
     sessions[session_id] = session

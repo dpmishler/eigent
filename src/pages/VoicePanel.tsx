@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useVoiceSession } from '@/hooks/useVoiceSession';
 import { Mic, MicOff, X, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -12,6 +12,11 @@ export default function VoicePanel() {
 
   const [isExpanded, setIsExpanded] = React.useState(false);
 
+  // Memoize callback to avoid re-creating useVoiceSession's connect function
+  const handleTaskSubmitted = useCallback((prompt: string) => {
+    console.log('Task submitted:', prompt);
+  }, []);
+
   const {
     isConnected,
     isListening,
@@ -23,19 +28,27 @@ export default function VoicePanel() {
     stopMicrophone,
   } = useVoiceSession({
     projectId: projectId || '',
-    onTaskSubmitted: (prompt) => {
-      // Could dispatch to chat store here
-      console.log('Task submitted:', prompt);
-    },
+    onTaskSubmitted: handleTaskSubmitted,
   });
 
-  // Auto-connect when panel opens
+  // Track if we've already connected to avoid reconnecting on re-renders
+  const hasConnectedRef = useRef(false);
+
+  // Auto-connect when panel opens - only run once per projectId
   useEffect(() => {
-    if (projectId) {
+    if (projectId && !hasConnectedRef.current) {
+      hasConnectedRef.current = true;
       connect().then(() => startMicrophone());
     }
-    return () => disconnect();
-  }, [projectId, connect, disconnect, startMicrophone]);
+    return () => {
+      if (hasConnectedRef.current) {
+        disconnect();
+        hasConnectedRef.current = false;
+      }
+    };
+    // Only depend on projectId - connect/disconnect/startMicrophone are stable refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   const handleClose = () => {
     disconnect();
