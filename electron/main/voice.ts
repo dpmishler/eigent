@@ -1,8 +1,9 @@
 import { ipcMain, BrowserWindow, globalShortcut, screen } from 'electron';
+import path from 'path';
 import { getVoicePort } from './voiceService';
 
 let activeVoiceWindow: BrowserWindow | null = null;
-let mainWindowRef: BrowserWindow | null = null;
+let preloadPath: string | null = null;
 
 // Helper function to open the voice panel
 function openVoicePanel() {
@@ -11,8 +12,8 @@ function openVoicePanel() {
     return;
   }
 
-  if (!mainWindowRef) {
-    console.warn('Voice panel: main window reference not set');
+  if (!preloadPath) {
+    console.warn('Voice panel: preload path not set');
     return;
   }
 
@@ -28,7 +29,7 @@ function openVoicePanel() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: mainWindowRef.webContents.getWebPreferences().preload,
+      preload: preloadPath,
     },
   });
 
@@ -52,8 +53,8 @@ function openVoicePanel() {
 }
 
 export function setupVoiceHandlers(mainWindow: BrowserWindow) {
-  // Store reference to main window for use in helper function
-  mainWindowRef = mainWindow;
+  // Store preload path for voice panel window
+  preloadPath = path.join(__dirname, '../preload/index.mjs');
 
   // Get voice service port (now dynamically retrieved from voiceService)
   ipcMain.handle('voice-get-port', () => {
@@ -130,5 +131,5 @@ export function cleanupVoiceHandlers() {
     activeVoiceWindow.close();
     activeVoiceWindow = null;
   }
-  mainWindowRef = null;
+  preloadPath = null;
 }

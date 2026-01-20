@@ -1,9 +1,9 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import { app } from 'electron';
 import log from 'electron-log';
 import * as http from 'http';
-import { findAvailablePort } from './init';
+import { findAvailablePort, killProcessOnPort } from './init';
 import { getBinaryPath, getVenvPath, getUvEnv } from './utils/process';
 
 let voiceProcess: ChildProcess | null = null;
@@ -30,6 +30,10 @@ export async function startVoiceService(): Promise<number> {
   // Find available port starting from 5002
   voicePort = await findAvailablePort(5002);
   log.info(`[VOICE SERVICE] Found available port: ${voicePort}`);
+
+  // Kill any stale process on this port to avoid race conditions
+  await killProcessOnPort(voicePort);
+  log.info(`[VOICE SERVICE] Cleared port ${voicePort}`);
 
   const voicePath = getVoicePath();
   const uvPath = await getBinaryPath('uv');
