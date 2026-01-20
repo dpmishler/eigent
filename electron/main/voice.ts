@@ -8,8 +8,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let activeVoiceWindow: BrowserWindow | null = null;
 let preloadPath: string | null = null;
 
+// Store current project ID for the voice panel
+let currentProjectId: string | null = null;
+
 // Helper function to open the voice panel
-function openVoicePanel() {
+function openVoicePanel(projectId?: string) {
+  if (projectId) {
+    currentProjectId = projectId;
+  }
+
   if (activeVoiceWindow) {
     activeVoiceWindow.focus();
     return;
@@ -41,13 +48,17 @@ function openVoicePanel() {
   const { width, height } = display.workAreaSize;
   activeVoiceWindow.setPosition(width - 340, height - 220);
 
-  // Load voice panel UI
+  // Load voice panel UI with project ID in hash
+  const hashPath = currentProjectId
+    ? `/voice-panel?projectId=${currentProjectId}`
+    : '/voice-panel';
+
   if (process.env.VITE_DEV_SERVER_URL) {
     activeVoiceWindow.loadURL(
-      `${process.env.VITE_DEV_SERVER_URL}#/voice-panel`
+      `${process.env.VITE_DEV_SERVER_URL}#${hashPath}`
     );
   } else {
-    activeVoiceWindow.loadFile('dist/index.html', { hash: '/voice-panel' });
+    activeVoiceWindow.loadFile('dist/index.html', { hash: hashPath });
   }
 
   activeVoiceWindow.on('closed', () => {
@@ -74,8 +85,8 @@ export function setupVoiceHandlers(mainWindow: BrowserWindow) {
   });
 
   // Create floating voice panel window
-  ipcMain.handle('voice-open-panel', () => {
-    openVoicePanel();
+  ipcMain.handle('voice-open-panel', (_, projectId?: string) => {
+    openVoicePanel(projectId);
   });
 
   // Close voice panel

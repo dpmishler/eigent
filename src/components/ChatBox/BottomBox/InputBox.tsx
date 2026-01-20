@@ -6,6 +6,7 @@ import { Paperclip, ArrowRight, X, Image, FileText, UploadCloud, Plus, Mic } fro
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { useProjectStore } from "@/store/projectStore";
 
 /**
  * File attachment object
@@ -102,6 +103,7 @@ export const Inputbox = ({
 	useCloudModelInDev = false,
 }: InputboxProps) => {
 	const { t } = useTranslation();
+	const { activeProjectId } = useProjectStore();
 	const internalTextareaRef = useRef<HTMLTextAreaElement>(null);
 	const textareaRef = externalTextareaRef || internalTextareaRef;
 	const [isFocused, setIsFocused] = useState(false);
@@ -169,7 +171,7 @@ export const Inputbox = ({
 	};
 
 	const handleVoiceClick = async () => {
-		await window.ipcRenderer.invoke('voice-open-panel');
+		await window.ipcRenderer.invoke('voice-open-panel', activeProjectId);
 	};
 
 	const getFileIcon = (fileName: string) => {

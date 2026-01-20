@@ -1,10 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useVoiceSession } from '@/hooks/useVoiceSession';
-import { useProjectStore } from '@/store/projectStore';
 import { Mic, MicOff, X, Maximize2, Minimize2 } from 'lucide-react';
 
 export default function VoicePanel() {
-  const { activeProjectId } = useProjectStore();
+  // Get project ID from URL hash params (passed from main window)
+  const projectId = useMemo(() => {
+    const hash = window.location.hash;
+    const match = hash.match(/projectId=([^&]+)/);
+    return match ? match[1] : null;
+  }, []);
+
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   const {
@@ -17,7 +22,7 @@ export default function VoicePanel() {
     startMicrophone,
     stopMicrophone,
   } = useVoiceSession({
-    projectId: activeProjectId || '',
+    projectId: projectId || '',
     onTaskSubmitted: (prompt) => {
       // Could dispatch to chat store here
       console.log('Task submitted:', prompt);
@@ -26,11 +31,11 @@ export default function VoicePanel() {
 
   // Auto-connect when panel opens
   useEffect(() => {
-    if (activeProjectId) {
+    if (projectId) {
       connect().then(() => startMicrophone());
     }
     return () => disconnect();
-  }, [activeProjectId, connect, disconnect, startMicrophone]);
+  }, [projectId, connect, disconnect, startMicrophone]);
 
   const handleClose = () => {
     disconnect();
