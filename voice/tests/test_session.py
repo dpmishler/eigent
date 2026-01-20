@@ -50,6 +50,8 @@ async def test_submit_task_function(mock_eigent_client):
 
         result = await session._fn_submit_task(prompt="Test task")
 
-        assert result["status"] == "submitted"
-        assert result["task_id"] == "task-123"
+        # Note: submit_task now notifies frontend instead of directly submitting
+        # Backend integration requires API keys from frontend
+        assert result["status"] == "prompt_ready"
+        assert "message" in result
         assert submitted_prompt == "Test task"

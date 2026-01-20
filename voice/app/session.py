@@ -82,9 +82,10 @@ class VoiceSession:
             await self._agent.connect()
             logger.debug("Voice agent connected")
 
-            # Start SSE subscription
+            # SSE subscription disabled - backend uses embedded SSE in POST /chat response
+            # TODO: Integrate with actual backend SSE architecture
             self._active = True
-            self._sse_task = asyncio.create_task(self._subscribe_events())
+            # self._sse_task = asyncio.create_task(self._subscribe_events())
             logger.info("Voice session started successfully for project %s", self.project_id)
 
         except Exception as e:
@@ -321,103 +322,79 @@ class VoiceSession:
             prompt: The task prompt to submit.
 
         Returns:
-            Dict with status and task_id.
+            Dict with status message.
+
+        Note: Full task submission requires API keys and model config from the
+        frontend. For now, we notify the frontend to display the task prompt.
         """
         logger.info("Function call: submit_task with prompt: %s", prompt[:100] if len(prompt) > 100 else prompt)
 
-        if not self._eigent:
-            logger.error("Cannot submit task: Eigent client not initialized")
-            return {"error": "Eigent client not initialized"}
+        # Notify frontend about the task prompt
+        if self.on_task_submitted:
+            try:
+                self.on_task_submitted(prompt)
+            except Exception as e:
+                logger.error("Error in on_task_submitted callback: %s", e)
 
-        try:
-            task_id = await self._eigent.submit_task(self.project_id, prompt)
-            if self.on_task_submitted:
-                try:
-                    self.on_task_submitted(prompt)
-                except Exception as e:
-                    logger.error("Error in on_task_submitted callback: %s", e)
-            return {"status": "submitted", "task_id": task_id}
-        except Exception as e:
-            logger.error("Failed to submit task: %s", e, exc_info=True)
-            return {"error": f"Failed to submit task: {str(e)}"}
+        # TODO: Full task submission requires integration with frontend's
+        # API keys and model configuration. For now, return success with
+        # instructions for the user.
+        return {
+            "status": "prompt_ready",
+            "message": f"Task prompt prepared: {prompt[:100]}...",
+            "instruction": "The task prompt has been sent to Eigent. Please check the main window to start execution.",
+        }
 
     async def _fn_get_project_context(self) -> dict:
         """Handle get_project_context function call.
 
-        Returns:
-            Dict with project context information.
+        Note: This endpoint is not yet implemented in the backend.
+        Returns a helpful message instead.
         """
         logger.info("Function call: get_project_context")
 
-        if not self._eigent:
-            logger.error("Cannot get project context: Eigent client not initialized")
-            return {"error": "Eigent client not initialized"}
-
-        try:
-            context = await self._eigent.get_project_context(self.project_id)
-            return context.model_dump()
-        except Exception as e:
-            logger.error("Failed to get project context: %s", e, exc_info=True)
-            return {"error": f"Failed to get project context: {str(e)}"}
+        # TODO: Implement when backend supports this endpoint
+        return {
+            "message": "Project context is not available via voice. Please check the Eigent window for project details.",
+            "suggestion": "You can describe what you want to do and I'll help formulate the task.",
+        }
 
     async def _fn_get_task_status(self) -> dict:
         """Handle get_task_status function call.
 
-        Returns:
-            Dict with current task status.
+        Note: This endpoint is not yet implemented in the backend.
+        Returns a helpful message instead.
         """
         logger.info("Function call: get_task_status")
 
-        if not self._eigent:
-            logger.error("Cannot get task status: Eigent client not initialized")
-            return {"error": "Eigent client not initialized"}
-
-        try:
-            status = await self._eigent.get_task_status(self.project_id)
-            if self.on_status_update:
-                try:
-                    self.on_status_update(status)
-                except Exception as e:
-                    logger.error("Error in on_status_update callback: %s", e)
-            return status.model_dump()
-        except Exception as e:
-            logger.error("Failed to get task status: %s", e, exc_info=True)
-            return {"error": f"Failed to get task status: {str(e)}"}
+        # TODO: Implement when backend supports this endpoint
+        return {
+            "message": "Task status is not available via voice. Please check the Eigent window for progress.",
+            "suggestion": "The main Eigent window shows detailed task progress and agent activity.",
+        }
 
     async def _fn_confirm_start(self) -> dict:
         """Handle confirm_start function call.
 
-        Returns:
-            Dict with confirmation status.
+        Note: Task confirmation happens automatically in the Eigent UI.
         """
         logger.info("Function call: confirm_start")
 
-        if not self._eigent:
-            logger.error("Cannot confirm start: Eigent client not initialized")
-            return {"error": "Eigent client not initialized"}
-
-        try:
-            await self._eigent.confirm_start(self.project_id)
-            return {"status": "started"}
-        except Exception as e:
-            logger.error("Failed to confirm start: %s", e, exc_info=True)
-            return {"error": f"Failed to confirm start: {str(e)}"}
+        # TODO: Implement when backend supports this endpoint
+        return {
+            "message": "Task confirmation happens in the Eigent window.",
+            "suggestion": "Check the Eigent window to confirm and start the task.",
+        }
 
     async def _fn_cancel_task(self) -> dict:
         """Handle cancel_task function call.
 
-        Returns:
-            Dict with cancellation status.
+        Note: Use the stop button in the Eigent UI to cancel tasks.
         """
         logger.info("Function call: cancel_task")
 
-        if not self._eigent:
-            logger.error("Cannot cancel task: Eigent client not initialized")
-            return {"error": "Eigent client not initialized"}
-
-        try:
-            await self._eigent.cancel_task(self.project_id)
-            return {"status": "cancelled"}
-        except Exception as e:
-            logger.error("Failed to cancel task: %s", e, exc_info=True)
-            return {"error": f"Failed to cancel task: {str(e)}"}
+        # TODO: Implement when backend supports this endpoint
+        return {
+            "message": "To cancel a task, use the stop button in the Eigent window.",
+            "suggestion": "Click the stop button in the main Eigent interface.",
+        }

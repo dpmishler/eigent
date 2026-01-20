@@ -14,7 +14,9 @@ export default function VoicePanel() {
 
   // Memoize callback to avoid re-creating useVoiceSession's connect function
   const handleTaskSubmitted = useCallback((prompt: string) => {
-    console.log('Task submitted:', prompt);
+    console.log('Task submitted via voice:', prompt);
+    // Send the prompt to the main window to paste into chat input
+    window.ipcRenderer.invoke('voice-task-submitted', prompt);
   }, []);
 
   const {

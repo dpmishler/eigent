@@ -115,6 +115,21 @@ export default function ChatBox(): JSX.Element {
     }
   }, [location.pathname, privacy, checkModelConfig]);
 
+  // Listen for voice task prompts from voice panel
+  useEffect(() => {
+    const handleVoiceTaskPrompt = (_event: unknown, prompt: string) => {
+      setMessage(prompt);
+      // Focus the textarea after setting the message
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    };
+
+    window.ipcRenderer.on('voice-task-prompt', handleVoiceTaskPrompt);
+
+    return () => {
+      window.ipcRenderer.removeAllListeners('voice-task-prompt');
+    };
+  }, []);
+
   // Also check when window gains focus (user returns from settings)
   useEffect(() => {
     const handleFocus = () => {

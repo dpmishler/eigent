@@ -119,6 +119,13 @@ export function setupVoiceHandlers(mainWindow: BrowserWindow) {
     }
   });
 
+  // Forward task prompt from voice panel to main window
+  ipcMain.handle('voice-task-submitted', (_, prompt: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('voice-task-prompt', prompt);
+    }
+  });
+
   // Register global shortcut for voice toggle
   const registered = globalShortcut.register(
     'CommandOrControl+Shift+V',

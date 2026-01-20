@@ -147,8 +147,9 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
               // Barge-in: user interrupted agent, stop all audio immediately
               bargedInRef.current = true;
               stopAllAudio();
-            } else if (msg.type === 'agent_started_speaking') {
+            } else if (msg.type === 'agent_started_speaking' || msg.type === 'agent_transcript') {
               // Agent starting new response, allow audio playback again
+              // Reset on both events since AgentStartedSpeaking isn't always sent
               bargedInRef.current = false;
             }
           } catch (e) {
