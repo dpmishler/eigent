@@ -19,10 +19,6 @@ from deepgram.agent import (
     AgentV1ConversationText,
     AgentV1SendFunctionCallResponse,
 )
-from deepgram.agent.v1 import (
-    AgentV1SettingsAgentThinkProvider_OpenAi,
-    AgentV1SettingsAgentSpeakEndpointProvider_Deepgram,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +70,18 @@ class VoiceAgent:
             agent=AgentV1SettingsAgent(
                 listen=None,  # Use defaults
                 think=AgentV1SettingsAgentThink(
-                    provider=AgentV1SettingsAgentThinkProvider_OpenAi(
-                        model=settings.llm_model,
-                    ),
+                    provider={
+                        "type": "open_ai",
+                        "model": settings.llm_model,
+                    },
                     prompt=VOICE_AGENT_SYSTEM_PROMPT,
                     functions=self._get_function_definitions(),
                 ),
                 speak=AgentV1SettingsAgentSpeak(
-                    provider=AgentV1SettingsAgentSpeakEndpointProvider_Deepgram(
-                        model=settings.tts_model,
-                    ),
+                    provider={
+                        "type": "deepgram",
+                        "model": settings.tts_model,
+                    },
                 ),
                 greeting=VOICE_AGENT_GREETING,
             ),
