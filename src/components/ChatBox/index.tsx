@@ -115,12 +115,20 @@ export default function ChatBox(): JSX.Element {
     }
   }, [location.pathname, privacy, checkModelConfig]);
 
+  // Ref to store handleSend for use in IPC handler
+  const handleSendRef = useRef<((msg?: string, taskId?: string) => Promise<void>) | null>(null);
+
   // Listen for voice task prompts from voice panel
   useEffect(() => {
     const handleVoiceTaskPrompt = (_event: unknown, prompt: string) => {
-      setMessage(prompt);
-      // Focus the textarea after setting the message
-      setTimeout(() => textareaRef.current?.focus(), 100);
+      // Auto-submit the voice task by calling handleSend directly
+      if (handleSendRef.current) {
+        handleSendRef.current(prompt);
+      } else {
+        // Fallback: just set the message if handleSend not ready
+        setMessage(prompt);
+        setTimeout(() => textareaRef.current?.focus(), 100);
+      }
     };
 
     window.ipcRenderer.on('voice-task-prompt', handleVoiceTaskPrompt);
@@ -402,6 +410,11 @@ export default function ChatBox(): JSX.Element {
       console.error('error:', error);
     }
   };
+
+  // Store handleSend in ref for use by voice IPC handler
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
 
   useEffect(() => {
     // Wait for both config and privacy to be loaded before handling share token
