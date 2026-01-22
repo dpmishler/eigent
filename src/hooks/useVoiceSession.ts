@@ -29,8 +29,9 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
   const audioQueueRef = useRef<AudioBufferSourceNode[]>([]);
   const nextPlayTimeRef = useRef<number>(0);
 
-  // Barge-in state: when true, ignore incoming audio (user interrupted agent)
-  const bargedInRef = useRef<boolean>(false);
+  // Note: We don't use a "bargedIn" flag to block audio - that approach doesn't
+  // work because audio blobs can arrive before AgentStartedSpeaking. Instead,
+  // we just clear the queue on UserStartedSpeaking and let new audio play.
 
   // Store callbacks in refs to avoid recreating connect when they change
   const onTaskSubmittedRef = useRef(onTaskSubmitted);
@@ -56,11 +57,6 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
 
   // Play raw PCM audio (linear16 @ 24kHz from Deepgram)
   const playAudio = useCallback(async (blob: Blob) => {
-    // Skip audio if user has barged in (interrupted agent)
-    if (bargedInRef.current) {
-      return;
-    }
-
     try {
       const audioContext = getPlaybackContext();
 
@@ -145,13 +141,11 @@ export function useVoiceSession({ projectId, authToken, onTaskSubmitted }: UseVo
               onTaskSubmittedRef.current?.(msg.prompt);
             } else if (msg.type === 'user_started_speaking') {
               // Barge-in: user interrupted agent, stop all audio immediately
-              bargedInRef.current = true;
+              // Don't block future audio - just clear current queue
               stopAllAudio();
-            } else if (msg.type === 'agent_started_speaking' || msg.type === 'agent_transcript') {
-              // Agent starting new response, allow audio playback again
-              // Reset on both events since AgentStartedSpeaking isn't always sent
-              bargedInRef.current = false;
             }
+            // Note: We don't need to handle agent_started_speaking for audio
+            // because we're not using a flag to block audio
           } catch (e) {
             console.error('Failed to parse WebSocket message:', e);
           }
